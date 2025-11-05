@@ -1,4 +1,4 @@
-# ARM: Alignment-oriented retrieval method
+# 💪 ARM: Alignment-oriented retrieval method
 
 If you find our code, or the paper helpful, please cite the paper
 
