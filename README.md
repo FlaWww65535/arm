@@ -21,7 +21,7 @@ If you find our code, or the paper helpful, please cite the paper
     2. Aggregation: `aggregate.py`
 
 ## Setup
-Download the [data](https://drive.google.com/drive/folders/1p5s_D4SACYMqbEjBz6dqaMyZj8i8n7Ad?usp=sharing) folder and put it in the root directory
+Download the [data](https://drive.google.com/file/d/1wyPFmj_SO-iOm_Yh2RNe3cIxO4Jp8DT3/view?usp=drive_link) folder and put it in the root directory
 
 The code can be executed in a pipelined fashion in the order mentioned in [Overview](#overview), so
 ```
