@@ -254,12 +254,20 @@ if __name__ == "__main__":
 
     num_partitions = 10
 
-    for expand_k in EXPAND_KS[args.dataset]:
-        filter_expanded_search_objects(
-            args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, args.partition
-        )
+    if args.partition is None:
+        #single process 
+        for partition in range(num_partitions):
+            for expand_k in EXPAND_KS[args.dataset]:
+                filter_expanded_search_objects(
+                    args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, partition
+                )
+        for expand_k in EXPAND_KS[args.dataset]:
+            merge(
+                num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/base_expand_{expand_k}_filtered', 'json'
+            )
+    else:
+        for expand_k in EXPAND_KS[args.dataset]:
+            filter_expanded_search_objects(
+                args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, args.partition
+            )
 
-    # for expand_k in EXPAND_KS[args.dataset]:
-    #     merge(
-    #         num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/base_expand_{expand_k}_filtered', 'json'
-    #     )

@@ -217,13 +217,26 @@ if __name__ == "__main__":
     elif args.dataset == 'ottqa':
         num_partitions = 40
 
-    # step 1: execute to get the output
-    for expand_k in EXPAND_KS[args.dataset]:
-        expand_base_search_objects(
-            args.dataset, args.embedding_model, args.lm,
-            expand_k, num_partitions, args.partition
-        )
+    if args.partition is None:
+        #single process 
+        for partition in range(num_partitions):
+            for expand_k in EXPAND_KS[args.dataset]:
+                expand_base_search_objects(
+                    args.dataset, args.embedding_model, args.lm,
+                    expand_k, num_partitions, partition
+                )
+            
+
+        # Step 2: Merge the outputs
+        for expand_k in EXPAND_KS[args.dataset]:
+            merge(num_partitions, f"./results/{args.dataset}/{args.embedding_model}_{args.lm}/base_expand_{expand_k}", "json")
+        
+    else:
+        # step 1: execute to get the output
+        for expand_k in EXPAND_KS[args.dataset]:
+            expand_base_search_objects(
+                args.dataset, args.embedding_model, args.lm,
+                expand_k, num_partitions, args.partition
+            )
     
-    # step 2: merge the outputs
-    # for expand_k in EXPAND_KS[args.dataset]:
-    #     merge(num_partitions, f"./results/{args.dataset}/{args.embedding_model}_{args.lm}/base_expand_{expand_k}", "json")
+

@@ -10,6 +10,9 @@ import tiktoken
 
 from utils.tokenizer import tokenize
 
+import dotenv
+dotenv.load_dotenv(".env")
+
 def create_directory(path):
   parent_dir = os.path.dirname(path)
   if not os.path.exists(parent_dir):
@@ -36,22 +39,39 @@ class Execute():
         api_key=CONFIG['api_key']
       )
     elif model_name.startswith('llama'):
-      model_id = 'meta-llama/Llama-3.1-8B-Instruct' if model_name == 'llama8' else 'meta-llama/Llama-3.1-70B-Instruct'
       if model_name == 'llama8':
+        model_id = os.environ.get("LLAMA8_MODEL_PATH", "meta-llama/Llama-3.1-8B-Instruct")
         print('bfloat16')
-        model = AutoModelForCausalLM.from_pretrained(model_id, device_map='auto', torch_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(
+          model_id,
+          device_map='auto',
+          torch_dtype=torch.bfloat16
+        )
       else:
-        model = AutoModelForCausalLM.from_pretrained(model_id, device_map='auto', quantization_config=quantization_config)
-      tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model_id = os.environ.get("LLAMA70B_MODEL_PATH", "meta-llama/Llama-3.1-70B-Instruct")
+        model = AutoModelForCausalLM.from_pretrained(
+          model_id,
+          device_map='auto',
+          quantization_config=quantization_config,
+          local_files_only=True
+        )
+      tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
       tokenizer.pad_token = tokenizer.eos_token
       self.model = {'model': model, 'tokenizer': tokenizer}
     elif model_name.startswith('qwen'):
-      model_id = 'Qwen/Qwen2.5-7B-Instruct'
-      model = AutoModelForCausalLM.from_pretrained(model_id, device_map='auto', torch_dtype=torch.bfloat16)
-      tokenizer = AutoTokenizer.from_pretrained(model_id)
+      model_id = os.environ.get("QWEN_MODEL_PATH", "Qwen/Qwen2.5-7B-Instruct")
+      model = AutoModelForCausalLM.from_pretrained(
+          model_id, device_map="auto", torch_dtype=torch.bfloat16, local_files_only=True
+      )
+      tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
       self.model = {'model': model, 'tokenizer': tokenizer}
   
-  def inference(self, r_idx:str=None, p:Union[str, list[str]]=None, partial_prefix_allowed_tokens_fn=None, return_logits=False):
+  def inference(
+      self, 
+      r_idx:str=None, 
+      p:Union[str, list[str]]=None, partial_prefix_allowed_tokens_fn=None, 
+      return_logits=False
+    ):
     if type(p) is str:
       chat = [{'role': 'user', 'content': p}]
     else:

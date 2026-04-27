@@ -1,5 +1,8 @@
 import os
+import logging
 from functools import partial
+from datetime import datetime
+from pathlib import Path
 from tqdm import tqdm
 from tiger_utils import read_json, write_json, read_pickle, write_pickle
 
@@ -7,16 +10,31 @@ from utils.utils import Execute, create_directory
 from constraint_decoder import ConstraintDecoder, prefix_allowed_tokens_fn
 from constraint_decoder_rerank import ConstraintDecoderRerank
 
+log_dir = Path("results")
+log_dir.mkdir(exist_ok=True)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+handler = logging.FileHandler(
+    log_dir / f"{datetime.now():%Y-%m-%d_%H-%M-%S}.txt", encoding="utf-8"
+)
+handler.setLevel(logging.DEBUG)
+handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+)
+logger.addHandler(handler)
+
 def run_prompts(
     num_partitions,
     partition: int,
     prompts,
     _fn: str,
     model: str,
-    embedding_model: str = None,
+    embedding_model: str|None = None,
     dataset=None,
-    q_idxs: list[int] = None,
-    stage: str = None,
+    q_idxs: list[int]|None = None,
+    stage: str|None = None,
     ilp_fn=None,
     return_logits=False,
 ):
@@ -91,7 +109,6 @@ def run_prompts(
                         partial_prefix_allowed_tokens_fn=partial_prefix_allowed_tokens_fn,
                         return_logits=return_logits,
                     )
-
                     if return_logits:
                         aux_output = {"tokens": output["tokens"], "aux": output["aux"]}
                         output = output["sentence"]
@@ -99,6 +116,7 @@ def run_prompts(
                     output = exec.inference(p=prompt)
         except Exception as e:
             print(e)
+            logger.exception("Inference failed")
             output, aux_output = "", None
 
         outputs.append(output)

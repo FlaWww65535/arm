@@ -294,9 +294,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     num_partitions = 8
+    if args.partition is None:
+        for partition in range(num_partitions):
+            vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, partition, f'base_expand_{args.expand_k}_filtered')
 
-    vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, args.partition, f'base_expand_{args.expand_k}_filtered')
-
-    # for expand_k in EXPAND_KS[args.dataset]:
-    #     merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_base_expand_{expand_k}_filtered', 'json')
-    #     merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_aux_base_expand_{expand_k}_filtered', 'pkl')
+        for expand_k in EXPAND_KS[args.dataset]:
+            merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_base_expand_{expand_k}_filtered', 'json')
+            merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_aux_base_expand_{expand_k}_filtered', 'pkl')
+    else:
+        vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, args.partition, f'base_expand_{args.expand_k}_filtered')

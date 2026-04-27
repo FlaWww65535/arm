@@ -1,0 +1,25 @@
+# Core scientific stack
+numpy
+pandas
+tabulate
+tqdm
+
+# LLM / embedding runtime
+torch
+transformers
+accelerate
+bitsandbytes
+sentence-transformers
+angle-emb
+openai
+tiktoken
+
+# Retrieval, NLP, and optimization
+bm25s
+nltk
+mip
+sql-metadata
+
+# Required by the code but not bundled in this repository:
+#   import tiger_utils
+# Install/provide the author's tiger_utils package separately, or place it on PYTHONPATH.

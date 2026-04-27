@@ -14,6 +14,14 @@ from utils.execute import run_prompts
 from utils.utils import chunk_id_to_original_id
 from metrics import get_gold_objects
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 def obtain_keywords(
     lm: str, embedding_model: str, dataset: str, num_partitions, partition: int
@@ -116,7 +124,12 @@ def lookup_objects_keywords(s: str, uae_objects, vocab_dict, k, bm25=None):
     return pred_objects
 
 
-def obtain_base_search_objects(lm: str, embedding_model: str, dataset: str, save: bool):
+def obtain_base_search_objects(
+    lm: str, 
+    embedding_model: str, 
+    dataset: str, 
+    save: bool
+    ):
     """
     Obtain the base search objects by doing a hybrid search using dense retrievers and keywords from `obtain_keywords`
     """
@@ -200,14 +213,28 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     num_partitions = 8
+    # Step 1: Execute to get the output first (multi-process, 0 to num_partitions-1)
 
-    # Step 1: Execute to get the output first
-    obtain_keywords(
-        args.lm, args.embedding_model, args.dataset, num_partitions, args.partition
-    )
+    # 直接将target设为obtain_keywords即可，无需额外包装函数
+    if args.partition is None:
+        #single process
+        for partition in range(num_partitions):
+            logger.info("Running IA for partition %d/%d...", partition + 1, num_partitions)
+            obtain_keywords(
+                args.lm, args.embedding_model, args.dataset, 
+                num_partitions, partition=partition
+            )
 
-    # Step 2: Merge the outputs
-    # merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/ia', 'json')
-
-    # Step 3: Parse the outputs to get the base objects
-    # obtain_base_search_objects(args.lm, args.embedding_model, args.dataset, save=True)
+        # Step 2: Merge the outputs
+        logger.info("Merging outputs...")
+        merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/ia', 'json')
+        logger.info("Merging complete.")
+        # Step 3: Parse the outputs to get the base objects
+        obtain_base_search_objects(args.lm, args.embedding_model, args.dataset, save=True)
+        logging.info("Base search objects obtained and saved.")
+        
+    else:
+        obtain_keywords(
+            args.lm, args.embedding_model, args.dataset, num_partitions, args.partition
+        )
+    # All processes complete, now gather/merge as needed.
