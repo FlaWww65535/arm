@@ -19,6 +19,8 @@ from utils.utils import (
 from utils.bird import load_table_scores
 from utils.ottqa import is_doc, retrieve_row
 from utils.musique import construct_bm25, get_sent_entity_sim
+from utils.logging_utils import ExperimentLogger
+
 
 
 def expand_base_search_objects(dataset, embedding_model, model, k, num_partitions, partition):
@@ -209,6 +211,10 @@ if __name__ == "__main__":
     parser.add_argument("-embed", "--embedding_model", choices=["uae", "snowflake"])
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
     args = parser.parse_args()
+
+    logger = ExperimentLogger.configure(
+        "align_structure_expand", args.dataset, args.embedding_model, args.lm
+    )
     
     if args.dataset == 'bird':
         num_partitions = 10
@@ -216,6 +222,7 @@ if __name__ == "__main__":
         num_partitions = 20
     elif args.dataset == 'ottqa':
         num_partitions = 40
+    logger.info("Expand Stage Start")
 
     if args.partition is None:
         #single process 
@@ -225,6 +232,8 @@ if __name__ == "__main__":
                     args.dataset, args.embedding_model, args.lm,
                     expand_k, num_partitions, partition
                 )
+                logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
+
             
 
         # Step 2: Merge the outputs
@@ -234,6 +243,7 @@ if __name__ == "__main__":
     else:
         # step 1: execute to get the output
         for expand_k in EXPAND_KS[args.dataset]:
+            logger.info("expand_k=%d partition=%d/%d", expand_k, args.partition, num_partitions)
             expand_base_search_objects(
                 args.dataset, args.embedding_model, args.lm,
                 expand_k, num_partitions, args.partition

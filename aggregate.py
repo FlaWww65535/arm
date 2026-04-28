@@ -5,8 +5,12 @@ from transformers import AutoTokenizer
 import torch
 from tqdm import tqdm
 import argparse
+import logging
 
 from utils.utils import EXPAND_KS
+from utils.logging_utils import ExperimentLogger
+
+logger = logging.getLogger(__name__)
 
 def get_object_segments(tokenizer, token_ids):
     segments = []
@@ -167,4 +171,7 @@ if __name__ == "__main__":
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
     args = parser.parse_args()
 
+    logger = ExperimentLogger.configure("aggregate", args.dataset, args.embedding_model, args.lm)
+    logger.info("aggregate start")
     aggregate_votes(args.dataset, args.embedding_model, args.lm, save=True)
+    logger.info("aggregate complete")

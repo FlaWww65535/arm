@@ -12,16 +12,8 @@ from bm25s import BM25
 
 from utils.execute import run_prompts
 from utils.utils import chunk_id_to_original_id
+from utils.logging_utils import ExperimentLogger
 from metrics import get_gold_objects
-
-import logging
-
-logger = logging.getLogger(__name__)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 
 def obtain_keywords(
     lm: str, embedding_model: str, dataset: str, num_partitions, partition: int
@@ -69,7 +61,6 @@ def obtain_keywords(
 
 import re
 from nltk.stem import PorterStemmer
-import logging
 
 def extract_word_from_parentheses(s: str):
     pred_keywords_tmp = re.findall(r"\((.*?)\)", s)
@@ -93,9 +84,6 @@ def lookup_objects_keywords(s: str, uae_objects, vocab_dict, k, bm25=None):
 
     pred_keywords = extract_word_from_parentheses(s)
     pred_keywords = [stemmer.stem(x.lower()) for x in pred_keywords]
-
-    logger = logging.getLogger("bm25s")
-    logger.setLevel(logging.INFO)
 
     if len(pred_keywords) == 0:
         pred_objects = []
@@ -212,6 +200,10 @@ if __name__ == "__main__":
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
     args = parser.parse_args()
 
+    logger = ExperimentLogger.configure(
+        "align_info", args.dataset, args.embedding_model, args.lm
+    )
+
     num_partitions = 8
     # Step 1: Execute to get the output first (multi-process, 0 to num_partitions-1)
 
@@ -231,7 +223,7 @@ if __name__ == "__main__":
         logger.info("Merging complete.")
         # Step 3: Parse the outputs to get the base objects
         obtain_base_search_objects(args.lm, args.embedding_model, args.dataset, save=True)
-        logging.info("Base search objects obtained and saved.")
+        logger.info("Base search objects obtained and saved.")
         
     else:
         obtain_keywords(

@@ -3,6 +3,7 @@
 import argparse
 from transformers import set_seed
 import re
+import logging
 from tqdm import tqdm
 import torch
 import numpy as np
@@ -22,7 +23,9 @@ from utils.utils import (
 from utils.ottqa import retrieve_row, is_doc
 from metrics import eval_retrieval
 from utils.execute import run_prompts
+from utils.logging_utils import ExperimentLogger
 
+logger = logging.getLogger(__name__)
 
 def get_join(dataset, j):
     if dataset == "ottqa":
@@ -293,13 +296,18 @@ if __name__ == "__main__":
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
     args = parser.parse_args()
 
+    logger = ExperimentLogger.configure("verify", args.dataset, args.embedding_model, args.lm)
+
     num_partitions = 8
     if args.partition is None:
         for partition in range(num_partitions):
+            logger.info("expand_k=%s partition=%d/%d", args.expand_k, partition, num_partitions)
             vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, partition, f'base_expand_{args.expand_k}_filtered')
 
         for expand_k in EXPAND_KS[args.dataset]:
+            logger.info("merge expand_k=%d", expand_k)
             merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_base_expand_{expand_k}_filtered', 'json')
             merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_aux_base_expand_{expand_k}_filtered', 'pkl')
     else:
+        logger.info("expand_k=%s partition=%d/%d", args.expand_k, args.partition, num_partitions)
         vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, args.partition, f'base_expand_{args.expand_k}_filtered')

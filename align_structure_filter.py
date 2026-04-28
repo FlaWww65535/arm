@@ -5,6 +5,7 @@ import torch
 from tqdm import tqdm
 import argparse
 import numpy as np
+import logging
 from tiger_utils import read_json, write_json, merge
 
 from utils.utils import (
@@ -19,8 +20,10 @@ from utils.utils import (
 from utils.ottqa import retrieve_row
 from utils.bird import load_table_scores
 from utils.musique import construct_bm25, get_sent_entity_sim
+from utils.logging_utils import ExperimentLogger
 
 SEP = "?sep?"
+logger = logging.getLogger(__name__)
 
 def ilp(dataset: str, objects, k: int, rel_scores, table_scores):
     num_objects = len(objects)
@@ -252,21 +255,28 @@ if __name__ == "__main__":
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
     args = parser.parse_args()
 
+    logger = ExperimentLogger.configure(
+        "align_structure_filter", args.dataset, args.embedding_model, args.lm
+    )
+
     num_partitions = 10
 
     if args.partition is None:
         #single process 
         for partition in range(num_partitions):
             for expand_k in EXPAND_KS[args.dataset]:
+                logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
                 filter_expanded_search_objects(
                     args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, partition
                 )
         for expand_k in EXPAND_KS[args.dataset]:
+            logger.info("merge expand_k=%d", expand_k)
             merge(
                 num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/base_expand_{expand_k}_filtered', 'json'
             )
     else:
         for expand_k in EXPAND_KS[args.dataset]:
+            logger.info("expand_k=%d partition=%d/%d", expand_k, args.partition, num_partitions)
             filter_expanded_search_objects(
                 args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, args.partition
             )
