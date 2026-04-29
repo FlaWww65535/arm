@@ -1,5 +1,8 @@
 # Step 1: information alignment
 
+from multiprocessing import Process
+import os
+
 import numpy as np
 from tiger_utils import read_json, write_json, merge, concat
 from tiger_utils.model import user, assistant, system
@@ -117,7 +120,7 @@ def obtain_base_search_objects(
     embedding_model: str, 
     dataset: str, 
     save: bool
-    ):
+):
     """
     Obtain the base search objects by doing a hybrid search using dense retrievers and keywords from `obtain_keywords`
     """
@@ -189,12 +192,25 @@ def obtain_base_search_objects(
     if save:
         write_json(preds_full, f"./results/{dataset}/{embedding_model}_{lm}/base.json")
 
+def worker(gpu_id:int):
+    partition_list = list(range(gpu_id, num_partitions, args.gpu_num))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    for partition in partition_list:
+        logger.info(
+            "Running IA for partition %d/%d...",
+            partition + 1, num_partitions
+        )
+        obtain_keywords(
+            args.lm, args.embedding_model, args.dataset,
+            num_partitions, partition=partition
+        )
 
 if __name__ == "__main__":
     set_seed(1234)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--partition", type=int)
+    parser.add_argument("-gpu_num", "--gpu_num", type=int)
     parser.add_argument("-d", "--dataset", choices=["bird", "ottqa", "wikihop"])
     parser.add_argument("-embed", "--embedding_model", choices=["uae", "snowflake"])
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
@@ -207,25 +223,42 @@ if __name__ == "__main__":
     num_partitions = 8
     # Step 1: Execute to get the output first (multi-process, 0 to num_partitions-1)
 
-    # 直接将target设为obtain_keywords即可，无需额外包装函数
     if args.partition is None:
         #single process
-        for partition in range(num_partitions):
-            logger.info("Running IA for partition %d/%d...", partition + 1, num_partitions)
-            obtain_keywords(
-                args.lm, args.embedding_model, args.dataset, 
-                num_partitions, partition=partition
-            )
-
-        # Step 2: Merge the outputs
+        if args.gpu_num is not None:
+            processes = []
+            for gpu_id in range(args.gpu_num):
+                p = Process(
+                    target=worker,
+                    args=(gpu_id,)
+                )
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
+            for p in processes:
+                if p.exitcode != 0:
+                    raise RuntimeError(f"Worker process failed with exit code {p.exitcode}")
+        else:
+            # 单进程处理
+            for partition in range(num_partitions):
+                logger.info(
+                    "Running IA for partition %d/%d...",
+                    partition + 1, num_partitions
+                )
+                obtain_keywords(
+                    args.lm, args.embedding_model, args.dataset,
+                    num_partitions, partition=partition
+                )
+        # 合并和后处理
         logger.info("Merging outputs...")
         merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/ia', 'json')
         logger.info("Merging complete.")
-        # Step 3: Parse the outputs to get the base objects
         obtain_base_search_objects(args.lm, args.embedding_model, args.dataset, save=True)
         logger.info("Base search objects obtained and saved.")
-        
+      
     else:
+        #处理特定分片
         obtain_keywords(
             args.lm, args.embedding_model, args.dataset, num_partitions, args.partition
         )

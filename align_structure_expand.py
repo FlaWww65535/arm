@@ -1,5 +1,8 @@
 # Step 2-1: expand the base search objects
 
+from multiprocessing import Process
+import os
+
 from tiger_utils import read_json, write_json, merge
 import numpy as np
 from tqdm import tqdm
@@ -203,10 +206,23 @@ def expand_base_search_objects(dataset, embedding_model, model, k, num_partition
         f"./results/{dataset}/{embedding_model}_{model}/base_expand_{k}_{partition}.json",
     )
 
+    
+def worker(proc_id:int):
+    partition_list = list(range(proc_id, num_partitions, args.parallel_num))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(proc_id)
+    for partition in partition_list:
+        for expand_k in EXPAND_KS[args.dataset]:
+            logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
+            expand_base_search_objects(
+                args.dataset, args.embedding_model, args.lm,
+                expand_k, num_partitions, partition
+            )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--partition", type=int)
+    parser.add_argument("-parallel_num", "--parallel_num", type=int)
     parser.add_argument("-d", "--dataset", choices=["bird", "ottqa", "wikihop"])
     parser.add_argument("-embed", "--embedding_model", choices=["uae", "snowflake"])
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
@@ -226,13 +242,28 @@ if __name__ == "__main__":
 
     if args.partition is None:
         #single process 
-        for partition in range(num_partitions):
-            for expand_k in EXPAND_KS[args.dataset]:
-                expand_base_search_objects(
-                    args.dataset, args.embedding_model, args.lm,
-                    expand_k, num_partitions, partition
+        if args.parallel_num is not None:
+            processes = []
+            for proc_id in range(args.parallel_num):
+                p = Process(
+                    target=worker,
+                    args=(proc_id,)
                 )
-                logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
+            for p in processes:
+                if p.exitcode != 0:
+                    raise RuntimeError(f"Worker process failed with exit code {p.exitcode}")
+        else:
+            for partition in range(num_partitions):
+                for expand_k in EXPAND_KS[args.dataset]:
+                    expand_base_search_objects(
+                        args.dataset, args.embedding_model, args.lm,
+                        expand_k, num_partitions, partition
+                    )
+                    logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
 
             
 

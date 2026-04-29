@@ -1,6 +1,9 @@
 # Step 3-1: self-verification
 
 import argparse
+from multiprocessing import Process
+import os
+
 from transformers import set_seed
 import re
 import logging
@@ -285,11 +288,20 @@ def vote_filtered_search_objects(
     )
 
 
+def worker(gpu_id:int):
+    partition_list = list(range(gpu_id, num_partitions, args.gpu_num))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    for partition in partition_list:
+        logger.info("expand_k=%s partition=%d/%d", args.expand_k, partition, num_partitions)
+        vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, partition, f'base_expand_{args.expand_k}_filtered')
+
+
 if __name__ == "__main__":
     set_seed(1234)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--partition", type=int)
+    parser.add_argument("-gpu_num", "--gpu_num", type=int)
     parser.add_argument("-k", "--expand_k", type=int)
     parser.add_argument("-d", "--dataset", choices=["bird", "ottqa", "wikihop"])
     parser.add_argument("-embed", "--embedding_model", choices=["uae", "snowflake"])
@@ -300,9 +312,24 @@ if __name__ == "__main__":
 
     num_partitions = 8
     if args.partition is None:
-        for partition in range(num_partitions):
-            logger.info("expand_k=%s partition=%d/%d", args.expand_k, partition, num_partitions)
-            vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, partition, f'base_expand_{args.expand_k}_filtered')
+        if args.gpu_num is not None:
+            processes = []
+            for gpu_id in range(args.gpu_num):
+                p = Process(
+                    target=worker,
+                    args=(gpu_id,)
+                )
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
+            for p in processes:
+                if p.exitcode != 0:
+                    raise RuntimeError(f"Worker process failed with exit code {p.exitcode}")
+        else:
+            for partition in range(num_partitions):
+                logger.info("expand_k=%s partition=%d/%d", args.expand_k, partition, num_partitions)
+                vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, partition, f'base_expand_{args.expand_k}_filtered')
 
         for expand_k in EXPAND_KS[args.dataset]:
             logger.info("merge expand_k=%d", expand_k)

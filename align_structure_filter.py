@@ -1,5 +1,8 @@
 # Step 2-2: for each expanded set of search objects, use mixed-integer programming (MIP) to find the top-k objects
 
+from multiprocessing import Process
+import os
+
 from mip import *
 import torch
 from tqdm import tqdm
@@ -247,9 +250,21 @@ def filter_expanded_search_objects(
         )
 
 
+def worker(proc_id:int):
+    partition_list = list(range(proc_id, num_partitions, args.parallel_num))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(proc_id)
+    for partition in partition_list:
+        for expand_k in EXPAND_KS[args.dataset]:
+            logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
+            filter_expanded_search_objects(
+                args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, partition
+            )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--partition", type=int)
+    parser.add_argument("-parallel_num", "--parallel_num", type=int)
     parser.add_argument("-d", "--dataset", choices=["bird", "ottqa", "wikihop"])
     parser.add_argument("-embed", "--embedding_model", choices=["uae", "snowflake"])
     parser.add_argument("-lm", "--lm", choices=["llama8", "qwen7"])
@@ -263,12 +278,27 @@ if __name__ == "__main__":
 
     if args.partition is None:
         #single process 
-        for partition in range(num_partitions):
-            for expand_k in EXPAND_KS[args.dataset]:
-                logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
-                filter_expanded_search_objects(
-                    args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, partition
+        if args.parallel_num is not None:
+            processes = []
+            for proc_id in range(args.parallel_num):
+                p = Process(
+                    target=worker,
+                    args=(proc_id,)
                 )
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
+            for p in processes:
+                if p.exitcode != 0:
+                    raise RuntimeError(f"Worker process failed with exit code {p.exitcode}")
+        else:
+            for partition in range(num_partitions):
+                for expand_k in EXPAND_KS[args.dataset]:
+                    logger.info("expand_k=%d partition=%d/%d", expand_k, partition, num_partitions)
+                    filter_expanded_search_objects(
+                        args.embedding_model, args.lm, args.dataset, expand_k, num_partitions, partition
+                    )
         for expand_k in EXPAND_KS[args.dataset]:
             logger.info("merge expand_k=%d", expand_k)
             merge(

@@ -1,6 +1,10 @@
 .DS_Store
-data
-data.zip
-results
-keyword_objects
 .env
+
+data/
+data.zip
+results/
+keyword_objects/
+
+__pycache__/
+*.py[cod]
