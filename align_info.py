@@ -1,8 +1,7 @@
 # Step 1: information alignment
 
-from multiprocessing import Process
 import os
-
+import multiprocessing as mp
 import numpy as np
 from tiger_utils import read_json, write_json, merge, concat
 from tiger_utils.model import user, assistant, system
@@ -192,7 +191,8 @@ def obtain_base_search_objects(
     if save:
         write_json(preds_full, f"./results/{dataset}/{embedding_model}_{lm}/base.json")
 
-def worker(gpu_id:int):
+def worker(gpu_id: int, args, num_partitions: int,logger):
+    print("Entering worker{}".format(gpu_id))
     partition_list = list(range(gpu_id, num_partitions, args.gpu_num))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     for partition in partition_list:
@@ -227,10 +227,11 @@ if __name__ == "__main__":
         #single process
         if args.gpu_num is not None:
             processes = []
+            mp.set_start_method('spawn')
             for gpu_id in range(args.gpu_num):
-                p = Process(
+                p = mp.Process(
                     target=worker,
-                    args=(gpu_id,)
+                    args=(gpu_id, args, num_partitions,logger)
                 )
                 p.start()
                 processes.append(p)

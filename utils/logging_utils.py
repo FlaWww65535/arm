@@ -11,6 +11,7 @@ EXPERIMENT_LOG_CONFIG = {
     "log_filename_format": "{run_timestamp}.log",
     "rotation_max_bytes": 500 * 1024,
     "rotation_backup_count": 1000,
+    "console_level": logging.WARNING,
 }
 
 
@@ -43,19 +44,25 @@ class ExperimentLogger:
                 logger.removeHandler(handler)
                 handler.close()
 
-        handler = RotatingFileHandler(
+        formatter = logging.Formatter(
+            f"%(asctime)s - [{stage}] - %(levelname)s - %(message)s"
+        )
+
+        file_handler = RotatingFileHandler(
             log_path,
             maxBytes=EXPERIMENT_LOG_CONFIG["rotation_max_bytes"],
             backupCount=EXPERIMENT_LOG_CONFIG["rotation_backup_count"],
             encoding="utf-8",
         )
-        setattr(handler, "_arm_experiment_handler", True)
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter(
-                f"%(asctime)s - [{stage}] - %(levelname)s - %(message)s"
-            )
-        )
-        logger.addHandler(handler)
+        setattr(file_handler, "_arm_experiment_handler", True)
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+        console_handler = logging.StreamHandler()
+        setattr(console_handler, "_arm_experiment_handler", True)
+        console_handler.setLevel(EXPERIMENT_LOG_CONFIG["console_level"])
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
         return logger

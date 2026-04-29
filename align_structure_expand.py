@@ -34,6 +34,23 @@ def expand_base_search_objects(dataset, embedding_model, model, k, num_partition
     base_objects_list = read_json(
         f"./keyword_objects/{dataset}/{embedding_model}_{model}/base.json"
     )
+    interval = len(base_objects_list) // num_partitions + 1
+    start_idx, end_idx = partition * interval, (partition + 1) * interval
+    expected_num = max(0, min(end_idx, len(base_objects_list)) - start_idx)
+
+    output_path = f"./results/{dataset}/{embedding_model}_{model}/base_expand_{k}_{partition}.json"
+    if os.path.exists(output_path):
+        try:
+            existing_data = read_json(output_path)
+            if len(existing_data) == expected_num:
+                logger.info("skip existing expand_k=%d partition=%d", k, partition)
+                return
+            logger.info(
+                "rerun incomplete expand_k=%d partition=%d: expected %d, got %d",
+                k, partition, expected_num, len(existing_data)
+            )
+        except Exception:
+            logger.info("rerun broken expand_k=%d partition=%d", k, partition)
 
     if dataset == "ottqa":
         q_embeds = torch.from_numpy(
@@ -124,9 +141,6 @@ def expand_base_search_objects(dataset, embedding_model, model, k, num_partition
 
     expanded_objects_list = []
 
-    interval = len(base_objects_list) // num_partitions + 1
-    start_idx, end_idx = partition * interval, (partition + 1) * interval
-
     for q_idx, base_objects in enumerate(tqdm(base_objects_list, total=end_idx-start_idx+1)):
         if not (start_idx <= q_idx < end_idx):
             continue
@@ -203,7 +217,7 @@ def expand_base_search_objects(dataset, embedding_model, model, k, num_partition
 
     write_json(
         expanded_objects_list,
-        f"./results/{dataset}/{embedding_model}_{model}/base_expand_{k}_{partition}.json",
+        output_path,
     )
 
     

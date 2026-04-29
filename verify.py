@@ -1,7 +1,7 @@
 # Step 3-1: self-verification
 
 import argparse
-from multiprocessing import Process
+import multiprocessing as mp
 import os
 
 from transformers import set_seed
@@ -288,7 +288,7 @@ def vote_filtered_search_objects(
     )
 
 
-def worker(gpu_id:int):
+def worker(gpu_id:int, args, num_partitions: int, logger):
     partition_list = list(range(gpu_id, num_partitions, args.gpu_num))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     for partition in partition_list:
@@ -314,10 +314,11 @@ if __name__ == "__main__":
     if args.partition is None:
         if args.gpu_num is not None:
             processes = []
+            mp.set_start_method('spawn')
             for gpu_id in range(args.gpu_num):
-                p = Process(
+                p = mp.Process(
                     target=worker,
-                    args=(gpu_id,)
+                    args=(gpu_id, args, num_partitions, logger)
                 )
                 p.start()
                 processes.append(p)

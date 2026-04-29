@@ -32,7 +32,32 @@ class Execute():
     set_seed(0)
 
     self.model_name = model_name
+    device_map_setting = {"": f"cuda:{os.environ.get('CUDA_VISIBLE_DEVICES')}"} if torch.cuda.is_available() else {"": "cpu"}
+    print("==========Try to init model========")
+    print("CUDA_VISIBLE_DEVICES:", os.environ.get("CUDA_VISIBLE_DEVICES"))
 
+    # if torch.cuda.is_available():
+    #     # 用pynvml查cuda:0的uuid
+    #     try:
+    #         import pynvml
+    #         pynvml.nvmlInit()
+    #         cuda_index = 0
+    #         handle = pynvml.nvmlDeviceGetHandleByIndex(cuda_index)
+    #         uuid = pynvml.nvmlDeviceGetUUID(handle)
+    #         print(f"pynvml.cuda:{cuda_index} uuid: {uuid}")
+    #         pynvml.nvmlShutdown()
+    #     except ImportError:
+    #         print("pynvml is not installed, cannot retrieve GPU uuid.")
+    #     except Exception as e:
+    #         print(f"Failed to get GPU uuid: {e}")
+    # else:
+    #     print("CUDA is not available, using CPU.")
+    def log_model_device(model):
+      print("cuda available:", torch.cuda.is_available())
+      print("CUDA_VISIBLE_DEVICES:", os.environ.get("CUDA_VISIBLE_DEVICES"))
+      print("model.device:", getattr(model, "device", None))
+      print("first param device:", next(model.parameters()).device)
+      print("hf_device_map:", getattr(model, "hf_device_map", None))
     if model_name.startswith('gpt'):
       CONFIG = read_json('./config.json')
       self.client = OpenAI(
@@ -44,14 +69,14 @@ class Execute():
         print('bfloat16')
         model = AutoModelForCausalLM.from_pretrained(
           model_id,
-          device_map='auto',
+          device_map=device_map_setting,
           torch_dtype=torch.bfloat16
         )
       else:
         model_id = os.environ.get("LLAMA70B_MODEL_PATH", "meta-llama/Llama-3.1-70B-Instruct")
         model = AutoModelForCausalLM.from_pretrained(
           model_id,
-          device_map='auto',
+          device_map=device_map_setting,
           quantization_config=quantization_config,
           local_files_only=True
         )
@@ -61,11 +86,11 @@ class Execute():
     elif model_name.startswith('qwen'):
       model_id = os.environ.get("QWEN_MODEL_PATH", "Qwen/Qwen2.5-7B-Instruct")
       model = AutoModelForCausalLM.from_pretrained(
-          model_id, device_map="auto", torch_dtype=torch.bfloat16, local_files_only=True
+          model_id, device_map=device_map_setting, torch_dtype=torch.bfloat16, local_files_only=True
       )
       tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
       self.model = {'model': model, 'tokenizer': tokenizer}
-  
+    log_model_device(self.model['model'])
   def inference(
       self, 
       r_idx:str=None, 

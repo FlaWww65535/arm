@@ -27,6 +27,7 @@ from utils.logging_utils import ExperimentLogger
 
 SEP = "?sep?"
 logger = logging.getLogger(__name__)
+is_verbose = False
 
 def ilp(dataset: str, objects, k: int, rel_scores, table_scores):
     num_objects = len(objects)
@@ -35,7 +36,7 @@ def ilp(dataset: str, objects, k: int, rel_scores, table_scores):
     cr, connections = compatibility_many(dataset, objects, table_scores)
 
     model = Model(sense=MAXIMIZE)
-
+    model.pump_passes = 0
     o = [
         model.add_var(var_type=BINARY, name=f"o{SEP}{objects[i].id}")
         for i in range(num_objects)
@@ -66,8 +67,26 @@ def ilp(dataset: str, objects, k: int, rel_scores, table_scores):
     )
 
     model.objective = maximize(obj)
-    model.verbose = 0
+    model.verbose = is_verbose
+    if is_verbose:
+        logger.info(
+            "ilp optimize expand_k=%s partition=%s q_idx=%s vars=%d constrs=%d",
+            expand_k,
+            partition,
+            q_idx,
+            len(model.vars),
+            len(model.constrs),
+        )
     model.optimize(max_seconds=60)
+    if is_verbose:
+        logger.info(
+            "ilp done expand_k=%s partition=%s q_idx=%s status=%s objective=%s",
+            expand_k,
+            partition,
+            q_idx,
+            model.status,
+            model.objective_value,
+        )
 
     # post-process
     pred_objects, pred_joins = [], []
@@ -117,7 +136,30 @@ def filter_expanded_search_objects(
 
     interval = (num_qs // num_partitions) + 1
     start, end = partition * interval, (partition + 1) * interval
+    #跳过逻辑
+    expected_num = max(0, min(end, num_qs) - start)
+    output_path = (
+        f"./results/{dataset}/{embedding_model}_{model}/{draft_fn}_filtered_{partition}.json"
+        if num_partitions >= 2
+        else f"./results/{dataset}/{embedding_model}_{model}/{draft_fn}_filtered.json"
+    )
 
+    if os.path.exists(output_path):
+        try:
+            existing_data = read_json(output_path)
+            if len(existing_data) == expected_num:
+                logger.info("skip existing filtered expand_k=%d partition=%d", expand_k, partition)
+                return
+            logger.info(
+                "rerun incomplete filtered expand_k=%d partition=%d: expected %d, got %d",
+                expand_k,
+                partition,
+                expected_num,
+                len(existing_data),
+            )
+        except Exception:
+            logger.info("rerun broken filtered expand_k=%d partition=%d", expand_k, partition)
+    #数据加载
     scores = np.load(f"./data/{dataset}/embeds/{embedding_model}/dev/score.npy")
     corpus_chunked_objects, object_chunk_idxs = get_chunked_corpus(dataset, "dev")
     objects, _, embed_scores = merge_chunk_scores(
@@ -239,15 +281,9 @@ def filter_expanded_search_objects(
         pred_list.append(ilp(dataset, cand_objects_repr, ilp_k, rel_score, table_scores))
 
     if num_partitions >= 2:
-        write_json(
-            pred_list,
-            f"./results/{dataset}/{embedding_model}_{model}/{draft_fn}_filtered_{partition}.json",
-        )
+        write_json(pred_list, output_path)
     else:
-        write_json(
-            pred_list,
-            f"./results/{dataset}/{embedding_model}_{model}/{draft_fn}_filtered.json",
-        )
+        write_json(pred_list, output_path)
 
 
 def worker(proc_id:int):
