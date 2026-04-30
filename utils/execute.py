@@ -10,21 +10,6 @@ from utils.utils import Execute, create_directory
 from constraint_decoder import ConstraintDecoder, prefix_allowed_tokens_fn
 from constraint_decoder_rerank import ConstraintDecoderRerank
 
-log_dir = Path("results")
-log_dir.mkdir(exist_ok=True)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-handler = logging.FileHandler(
-    log_dir / f"{datetime.now():%Y-%m-%d_%H-%M-%S}.txt", encoding="utf-8"
-)
-handler.setLevel(logging.DEBUG)
-handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-)
-logger.addHandler(handler)
-
 def run_prompts(
     num_partitions,
     partition: int,
@@ -116,7 +101,6 @@ def run_prompts(
                     output = exec.inference(p=prompt)
         except Exception as e:
             print(e)
-            logger.exception("Inference failed")
             output, aux_output = "", None
 
         outputs.append(output)

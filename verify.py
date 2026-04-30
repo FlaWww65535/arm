@@ -75,13 +75,39 @@ def vote_filtered_search_objects(
     '''
 
     print(dataset, model, embedding_model, ilp_fn, num_partitions, partition)
-    preds = read_json(f"./results/{dataset}/{embedding_model}_{model}/{ilp_fn}.json")
     qs = read_json(f"./data/{dataset}/dev.json")
-
-    prompts = []
-
+    #分片跳过逻辑
     interval = (len(qs) // num_partitions) + 1
     start, end = partition * interval, (partition + 1) * interval
+    expected_num = max(0, min(end, len(qs)) - start)
+    output_prefix = f"./results/{dataset}/{embedding_model}_{model}/verify"
+    output_suffix = ilp_fn.replace("ilp_", "")
+    output_path = f"{output_prefix}_{output_suffix}_{partition}.json"
+    aux_output_path = f"{output_prefix}_aux_{output_suffix}_{partition}.pkl"
+
+    if os.path.exists(output_path) and os.path.exists(aux_output_path):
+        try:
+            existing_outputs = read_json(output_path)
+            existing_aux_outputs = read_pickle(aux_output_path)
+            if len(existing_outputs) == expected_num and len(existing_aux_outputs) == expected_num:
+                logger.info("skip existing verify ilp_fn=%s partition=%d", ilp_fn, partition)
+                return
+            logger.info(
+                "rerun incomplete verify ilp_fn=%s partition=%d: expected %d, got json=%d aux=%d",
+                ilp_fn,
+                partition,
+                expected_num,
+                len(existing_outputs),
+                len(existing_aux_outputs),
+            )
+        except Exception:
+            logger.info("rerun broken verify ilp_fn=%s partition=%d", ilp_fn, partition)
+
+    preds = read_json(f"./results/{dataset}/{embedding_model}_{model}/{ilp_fn}.json")
+
+    #处理逻辑
+    prompts = []
+
     q_idxs = list(range(len(qs)))
 
     examples = read_json(f"./data/{dataset}/examples.json")
@@ -332,10 +358,9 @@ if __name__ == "__main__":
                 logger.info("expand_k=%s partition=%d/%d", args.expand_k, partition, num_partitions)
                 vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, partition, f'base_expand_{args.expand_k}_filtered')
 
-        for expand_k in EXPAND_KS[args.dataset]:
-            logger.info("merge expand_k=%d", expand_k)
-            merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_base_expand_{expand_k}_filtered', 'json')
-            merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_aux_base_expand_{expand_k}_filtered', 'pkl')
+        logger.info("merge expand_k=%d", args.expand_k)
+        merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_base_expand_{args.expand_k}_filtered', 'json')
+        merge(num_partitions, f'./results/{args.dataset}/{args.embedding_model}_{args.lm}/verify_aux_base_expand_{args.expand_k}_filtered', 'pkl')
     else:
         logger.info("expand_k=%s partition=%d/%d", args.expand_k, args.partition, num_partitions)
         vote_filtered_search_objects(args.dataset, args.lm, args.embedding_model, num_partitions, args.partition, f'base_expand_{args.expand_k}_filtered')
